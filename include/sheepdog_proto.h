@@ -90,6 +90,7 @@
 #define VDI_BIT (UINT64_C(1) << 63)
 #define VMSTATE_BIT (UINT64_C(1) << 62)
 #define VDI_ATTR_BIT (UINT64_C(1) << 61)
+#define LEDGER_BIT (UINT64_C(1) << 60)
 #define MAX_DATA_OBJS (1ULL << 20)
 #define MAX_CHILDREN 1024U
 #define SD_MAX_VDI_LEN 256U
@@ -104,6 +105,7 @@
 #define SD_INODE_SIZE (sizeof(struct sd_inode))
 #define SD_INODE_HEADER_SIZE offsetof(struct sd_inode, data_vdi_id)
 #define SD_ATTR_OBJ_SIZE (sizeof(struct sheepdog_vdi_attr))
+#define SD_LEDGER_OBJ_SIZE (UINT64_C(1) << 22)
 #define CURRENT_VDI_ID 0
 
 #define STORE_LEN 16
@@ -147,6 +149,11 @@ struct sd_req {
 			uint8_t		set_bitmap; /* 0 means false */
 						    /* others mean true */
 		} vdi_state;
+		struct {
+			uint64_t	oid;
+			uint32_t	generation;
+			uint32_t	count;
+		} ref;
 
 		uint32_t		__pad[8];
 	};
@@ -271,10 +278,15 @@ static inline bool is_vdi_attr_obj(uint64_t oid)
 	return !!(oid & VDI_ATTR_BIT);
 }
 
+static inline bool is_ledger_object(uint64_t oid)
+{
+	return !!(oid & LEDGER_BIT);
+}
+
 static inline bool is_data_obj(uint64_t oid)
 {
 	return !is_vdi_obj(oid) && !is_vmstate_obj(oid) &&
-		!is_vdi_attr_obj(oid);
+		!is_vdi_attr_obj(oid) && !is_ledger_object(oid);
 }
 
 static inline size_t get_objsize(uint64_t oid)
@@ -284,6 +296,9 @@ static inline size_t get_objsize(uint64_t oid)
 
 	if (is_vdi_attr_obj(oid))
 		return SD_ATTR_OBJ_SIZE;
+
+	if (is_ledger_object(oid))
+		return SD_LEDGER_OBJ_SIZE;
 
 	return SD_DATA_OBJ_SIZE;
 }
@@ -328,6 +343,16 @@ static inline __attribute__((used)) void __sd_proto_build_bug_ons(void)
 	/* never called, only for checking BUILD_BUG_ON()s */
 	BUILD_BUG_ON(sizeof(struct sd_req) != SD_REQ_SIZE);
 	BUILD_BUG_ON(sizeof(struct sd_rsp) != SD_RSP_SIZE);
+}
+
+static inline uint64_t ledger_oid_to_data_oid(uint64_t oid)
+{
+	return ~LEDGER_BIT & oid;
+}
+
+static inline uint64_t data_oid_to_ledger_oid(uint64_t oid)
+{
+	return LEDGER_BIT | oid;
 }
 
 #endif

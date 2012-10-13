@@ -348,6 +348,7 @@ int write_object(uint64_t oid, char *data, unsigned int datalen,
 int read_object(uint64_t oid, char *data, unsigned int datalen,
 		uint64_t offset);
 int remove_object(uint64_t oid);
+int dec_object_refcnt(uint64_t data_oid, uint32_t generation, uint32_t refcnt);
 
 int exec_local_req(struct sd_req *rq, void *data);
 void local_req_init(void);
@@ -391,12 +392,14 @@ int gateway_read_obj(struct request *req);
 int gateway_write_obj(struct request *req);
 int gateway_create_and_write_obj(struct request *req);
 int gateway_remove_obj(struct request *req);
+int gateway_decref_object(struct request *req);
 
 /* backend store */
 int peer_read_obj(struct request *req);
 int peer_write_obj(struct request *req);
 int peer_create_and_write_obj(struct request *req);
 int peer_remove_obj(struct request *req);
+int peer_decref_object(struct request *req);
 
 /* object_cache */
 
