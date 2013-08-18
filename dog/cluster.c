@@ -468,9 +468,10 @@ static int cluster_reweight(int argc, char **argv)
 	return EXIT_SUCCESS;
 }
 
-static void cluster_check_cb(uint32_t vid, const char *name, const char *tag,
-			     uint32_t snapid, uint32_t flags,
-			     const struct sd_inode *inode, void *data)
+static void cluster_check_replica_cb(uint32_t vid, const char *name,
+				     const char *tag, uint32_t snapid,
+				     uint32_t flags,
+				     const struct sd_inode *inode, void *data)
 {
 	if (vdi_is_snapshot(inode))
 		printf("fix snapshot %s (id: %d, tag: \"%s\")\n", name,
@@ -481,12 +482,57 @@ static void cluster_check_cb(uint32_t vid, const char *name, const char *tag,
 	do_vdi_check(inode);
 }
 
-static int cluster_check(int argc, char **argv)
+static int cluster_check_replica(int argc, char **argv)
 {
-	if (parse_vdi(cluster_check_cb, SD_INODE_SIZE, NULL) < 0)
+	if (parse_vdi(cluster_check_replica_cb, SD_INODE_SIZE, NULL) < 0)
 		return EXIT_SYSFAIL;
 
 	return EXIT_SUCCESS;
+}
+
+static int cluster_check_reference(int argc, char **argv)
+{
+	return EXIT_SYSFAIL;
+}
+
+static int cluster_check_all(int argc, char **argv);
+
+static struct subcommand cluster_check_cmd[] = {
+	{"replica", NULL, NULL, "check and repair image's consistency",
+	 NULL, CMD_NEED_ARG, cluster_check_replica},
+	{"reference", NULL, NULL, "check and repair object reference counts",
+	 NULL, CMD_NEED_ARG, cluster_check_reference},
+	{"all", NULL, NULL, "run all vdi check subcommands",
+	 NULL, CMD_NEED_ARG, cluster_check_all},
+	{NULL,},
+};
+
+static int cluster_check_all(int argc, char **argv)
+{
+	int ret = EXIT_SUCCESS;
+
+	for (int i = 0; cluster_check_cmd[i].name; i++) {
+		if (strcmp(cluster_check_cmd[i].name, "all") == 0)
+			continue;
+
+		printf("# %s\n", cluster_check_cmd[i].desc);
+		ret = cluster_check_cmd[i].fn(argc, argv);
+		if (ret != EXIT_SUCCESS) {
+			sd_err("vdi check %s failed", cluster_check_cmd[i].name);
+			break;
+		}
+		printf("\n");
+	}
+
+	if (ret == EXIT_SUCCESS)
+		printf("all the vdi check commands finished\n");
+
+	return ret;
+}
+
+static int cluster_check(int argc, char **argv)
+{
+	return do_generic_subcommand(cluster_check_cmd, argc, argv);
 }
 
 static struct subcommand cluster_cmd[] = {
@@ -505,8 +551,8 @@ static struct subcommand cluster_cmd[] = {
 	 cluster_recover, cluster_options},
 	{"reweight", NULL, "aph", "reweight the cluster", NULL, 0,
 	 cluster_reweight, cluster_options},
-	{"check", NULL, "aph", "check and repair cluster", NULL,
-	 CMD_NEED_NODELIST, cluster_check, cluster_options},
+	{"check", NULL, "aph", "check and repair cluster", cluster_check_cmd, 0,
+	 cluster_check, cluster_options},
 	{NULL,},
 };
 
