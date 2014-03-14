@@ -856,8 +856,15 @@ static int local_discard_obj(struct request *req)
 		ret = sd_inode_write_vid(inode, idx, vid, 0, 0, false, false);
 		if (ret != SD_RES_SUCCESS)
 			goto out;
-		if (sd_remove_object(oid) != SD_RES_SUCCESS)
+		if (inode->store_policy == 1 &&
+		    sd_remove_object(oid) != SD_RES_SUCCESS)
 			sd_err("failed to remove %"PRIx64, oid);
+
+		/*
+		 * in a case of non hypervolume vdi, deferencing and removing
+		 * are done in the process of updating inode
+		 * (gateway_write_obj())
+		 */
 	}
 	/*
 	 * Return success even if sd_remove_object fails because we have updated
