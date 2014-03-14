@@ -1,0 +1,12 @@
+QA output created by 089
+using backend plain store
+STORE	DATA	VDI	VMSTATE	ATTR	LEDGER	STALE
+0	4	2	0	0	4	0
+1	4	2	0	0	4	0
+2	4	2	0	0	4	0
+discard 16777216/16777216 bytes at offset 0
+16 MiB, X ops; XX:XX:XX.X (XXX YYY/sec and XXX ops/sec)
+STORE	DATA	VDI	VMSTATE	ATTR	LEDGER	STALE
+0	0	2	0	0	0	0
+1	0	2	0	0	0	0
+2	0	2	0	0	0	0

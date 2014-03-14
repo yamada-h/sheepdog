@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# Test a combination of object reclaim and discard
+
+. ./common
+
+for i in 0 1 2; do
+    _start_sheep $i
+done
+_wait_for_sheep 3
+_cluster_format -c 2:1
+
+$DOG vdi create test 16M
+dd if=/dev/zero | $DOG vdi write test
+$DOG vdi snapshot test
+
+$DOG vdi delete test -s 1
+_node_info
+
+$QEMU_IO -c "discard 0 16m" sheepdog:test | _filter_qemu_io
+_node_info
