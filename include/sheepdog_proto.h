@@ -20,7 +20,7 @@
 #include "compiler.h"
 #include "bitops.h"
 
-#define SD_PROTO_VER 0x02
+#define SD_PROTO_VER 0x03
 
 /* This or later version supports trimming zero sectors from read response */
 #define SD_PROTO_VER_TRIM_ZERO_SECTORS 0x02
@@ -117,8 +117,8 @@
 
 #define STORE_LEN 16
 
-#define SD_REQ_SIZE 48
-#define SD_RSP_SIZE 48
+#define SD_REQ_SIZE 56
+#define SD_RSP_SIZE 56
 
 struct sd_req {
 	uint8_t		proto_ver;
@@ -137,6 +137,8 @@ struct sd_req {
 			uint8_t		reserved;
 			uint32_t	tgt_epoch;
 			uint64_t	offset;
+			uint32_t	working_vid;
+			uint32_t	__pad;
 		} obj;
 		struct {
 			uint64_t	vdi_size;
@@ -171,7 +173,7 @@ struct sd_req {
 			uint32_t	count;
 		} ref;
 
-		uint32_t		__pad[8];
+		uint32_t		__pad[10];
 	};
 };
 
@@ -213,7 +215,7 @@ struct sd_rsp {
 			uint8_t		digest[20];
 		} hash;
 
-		uint32_t		__pad[8];
+		uint32_t		__pad[10];
 	};
 };
 
