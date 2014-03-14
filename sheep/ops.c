@@ -839,7 +839,7 @@ static int local_flush_vdi(struct request *req)
 static int local_discard_obj(struct request *req)
 {
 	uint64_t oid = req->rq.obj.oid;
-	uint32_t vid = oid_to_vid(oid), tmp_vid;
+	uint32_t vid = req->rq.obj.working_vid, tmp_vid;
 	int ret = SD_RES_SUCCESS, idx = data_oid_to_idx(oid);
 	struct sd_inode *inode = xmalloc(sizeof(struct sd_inode));
 
