@@ -844,6 +844,10 @@ static int local_discard_obj(struct request *req)
 	struct sd_inode *inode = xmalloc(sizeof(struct sd_inode));
 
 	sd_debug("%"PRIx64, oid);
+
+	if (vid_is_snapshot(vid))
+		return SD_RES_READONLY;
+
 	ret = sd_read_object(vid_to_vdi_oid(vid), (char *)inode,
 			     sizeof(struct sd_inode), 0);
 	if (ret != SD_RES_SUCCESS)

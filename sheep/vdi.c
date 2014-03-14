@@ -62,7 +62,7 @@ static struct vdi_state_entry *vdi_state_insert(struct rb_root *root,
 	return rb_insert(root, new, node, vdi_state_cmp);
 }
 
-static bool vid_is_snapshot(uint32_t vid)
+bool vid_is_snapshot(uint32_t vid)
 {
 	struct vdi_state_entry *entry;
 

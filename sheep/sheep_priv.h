@@ -295,6 +295,7 @@ int init_disk_space(const char *d);
 int lock_base_dir(const char *d);
 
 int fill_vdi_state_list(void *data);
+bool vid_is_snapshot(uint32_t vid);
 bool oid_is_readonly(uint64_t oid);
 int get_vdi_copy_number(uint32_t vid);
 int get_vdi_copy_policy(uint32_t vid);
