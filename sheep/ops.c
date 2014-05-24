@@ -49,7 +49,8 @@ struct sd_op_template {
 	 * will be called on the local node.
 	 */
 	int (*process_work)(struct request *req);
-	int (*process_main)(const struct sd_req *req, struct sd_rsp *rsp, void *data);
+	int (*process_main)(const struct sd_req *req, struct sd_rsp *rsp, void *data,
+			    const struct sd_node *sender);
 };
 
 /*
@@ -119,7 +120,7 @@ static int cluster_new_vdi(struct request *req)
 }
 
 static int post_cluster_new_vdi(const struct sd_req *req, struct sd_rsp *rsp,
-				void *data)
+				void *data, const struct sd_node *sender)
 {
 	unsigned long nr = rsp->vdi.vdi_id;
 	int ret = rsp->result;
@@ -181,7 +182,7 @@ static void cache_delete_done(struct work *work)
 }
 
 static int post_cluster_del_vdi(const struct sd_req *req, struct sd_rsp *rsp,
-				void *data)
+				void *data, const struct sd_node *sender)
 {
 	unsigned long vid = rsp->vdi.vdi_id;
 	struct cache_deletion_work *dw;
@@ -251,7 +252,7 @@ static int remove_epoch(uint32_t epoch)
 }
 
 static int cluster_make_fs(const struct sd_req *req, struct sd_rsp *rsp,
-			   void *data)
+			   void *data, const struct sd_node *sender)
 {
 	int i, ret;
 	uint32_t latest_epoch;
@@ -301,7 +302,7 @@ static int cluster_make_fs(const struct sd_req *req, struct sd_rsp *rsp,
 }
 
 static int cluster_shutdown(const struct sd_req *req, struct sd_rsp *rsp,
-			    void *data)
+			    void *data, const struct sd_node *sender)
 {
 	sys->cinfo.status = SD_STATUS_SHUTDOWN;
 	if (!node_in_recovery()) {
@@ -318,16 +319,16 @@ static int cluster_shutdown(const struct sd_req *req, struct sd_rsp *rsp,
 	return SD_RES_SUCCESS;
 }
 
-static int cluster_enable_recover(const struct sd_req *req,
-				    struct sd_rsp *rsp, void *data)
+static int cluster_enable_recover(const struct sd_req *req, struct sd_rsp *rsp,
+				  void *data, const struct sd_node *sender)
 {
 	sys->cinfo.disable_recovery = false;
 	resume_suspended_recovery();
 	return SD_RES_SUCCESS;
 }
 
-static int cluster_disable_recover(const struct sd_req *req,
-				   struct sd_rsp *rsp, void *data)
+static int cluster_disable_recover(const struct sd_req *req, struct sd_rsp *rsp,
+				   void *data, const struct sd_node *sender)
 {
 	sys->cinfo.disable_recovery = true;
 	return SD_RES_SUCCESS;
@@ -404,13 +405,13 @@ static int local_get_store_list(struct request *req)
 }
 
 static int local_read_vdis(const struct sd_req *req, struct sd_rsp *rsp,
-			   void *data)
+			   void *data, const struct sd_node *sender)
 {
 	return read_vdis(data, req->data_length, &rsp->data_length);
 }
 
 static int local_get_vdi_copies(const struct sd_req *req, struct sd_rsp *rsp,
-			   void *data)
+				void *data, const struct sd_node *sender)
 {
 	rsp->data_length = fill_vdi_state_list(data);
 
@@ -426,7 +427,7 @@ static int local_stat_sheep(struct request *req)
 }
 
 static int local_stat_recovery(const struct sd_req *req, struct sd_rsp *rsp,
-					void *data)
+			       void *data, const struct sd_node *sender)
 {
 	get_recovery_state(data);
 	rsp->data_length = sizeof(struct recovery_state);
@@ -566,7 +567,7 @@ static int cluster_force_recover_work(struct request *req)
 
 static int cluster_force_recover_main(const struct sd_req *req,
 				      struct sd_rsp *rsp,
-				      void *data)
+				      void *data, const struct sd_node *sender)
 {
 	struct vnode_info *old_vnode_info, *vnode_info;
 	int ret = SD_RES_SUCCESS;
@@ -605,7 +606,7 @@ err:
 }
 
 static int cluster_cleanup(const struct sd_req *req, struct sd_rsp *rsp,
-				void *data)
+			   void *data, const struct sd_node *sender)
 {
 	int ret;
 
@@ -624,7 +625,7 @@ static int cluster_cleanup(const struct sd_req *req, struct sd_rsp *rsp,
 }
 
 static int cluster_notify_vdi_add(const struct sd_req *req, struct sd_rsp *rsp,
-				  void *data)
+				  void *data, const struct sd_node *sender)
 {
 	if (req->vdi_state.old_vid)
 		/* make the previous working vdi a snapshot */
@@ -642,7 +643,7 @@ static int cluster_notify_vdi_add(const struct sd_req *req, struct sd_rsp *rsp,
 }
 
 static int cluster_notify_vdi_del(const struct sd_req *req, struct sd_rsp *rsp,
-				  void *data)
+				  void *data, const struct sd_node *sender)
 {
 	uint32_t vid = *(uint32_t *)data;
 
@@ -650,7 +651,7 @@ static int cluster_notify_vdi_del(const struct sd_req *req, struct sd_rsp *rsp,
 }
 
 static int cluster_delete_cache(const struct sd_req *req, struct sd_rsp *rsp,
-				void *data)
+				void *data, const struct sd_node *sender)
 {
 	uint32_t vid = oid_to_vid(req->obj.oid);
 
@@ -662,7 +663,7 @@ static int cluster_delete_cache(const struct sd_req *req, struct sd_rsp *rsp,
 
 static int cluster_recovery_completion(const struct sd_req *req,
 				       struct sd_rsp *rsp,
-				       void *data)
+				       void *data, const struct sd_node *sender)
 {
 	static struct sd_node recovereds[SD_MAX_NODES], *node;
 	static size_t nr_recovereds;
@@ -715,8 +716,8 @@ static int cluster_recovery_completion(const struct sd_req *req,
 	return SD_RES_SUCCESS;
 }
 
-static int cluster_alter_cluster_copy(const struct sd_req *req,
-			struct sd_rsp *rsp, void *data)
+static int cluster_alter_cluster_copy(const struct sd_req *req, struct sd_rsp *rsp,
+				      void *data, const struct sd_node *sender)
 {
 	if (req->cluster.copy_policy != 0)
 		return SD_RES_INVALID_PARMS;
@@ -725,8 +726,8 @@ static int cluster_alter_cluster_copy(const struct sd_req *req,
 	return set_cluster_config(&sys->cinfo);
 }
 
-static int cluster_alter_vdi_copy(const struct sd_req *req,
-			struct sd_rsp *rsp, void *data)
+static int cluster_alter_vdi_copy(const struct sd_req *req, struct sd_rsp *rsp,
+				  void *data, const struct sd_node *sender)
 {
 	if (req->cluster.copy_policy != 0)
 		return SD_RES_INVALID_PARMS;
@@ -774,7 +775,7 @@ static bool node_size_varied(void)
 }
 
 static int cluster_reweight(const struct sd_req *req, struct sd_rsp *rsp,
-			    void *data)
+			    void *data, const struct sd_node *sender)
 {
 	if (node_size_varied())
 		return sys->cdrv->update_node(&sys->this_node);
@@ -793,7 +794,7 @@ static int local_md_info(struct request *request)
 }
 
 static int local_md_plug(const struct sd_req *req, struct sd_rsp *rsp,
-			 void *data)
+			 void *data, const struct sd_node *sender)
 {
 	char *disks = (char *)data;
 
@@ -801,7 +802,7 @@ static int local_md_plug(const struct sd_req *req, struct sd_rsp *rsp,
 }
 
 static int local_md_unplug(const struct sd_req *req, struct sd_rsp *rsp,
-			   void *data)
+			   void *data, const struct sd_node *sender)
 {
 	char *disks = (char *)data;
 
@@ -846,7 +847,7 @@ out:
 }
 
 static int local_sd_stat(const struct sd_req *req, struct sd_rsp *rsp,
-			 void *data)
+			 void *data, const struct sd_node *sender)
 {
 	memcpy(data, &sys->stat, sizeof(struct sd_stat));
 	rsp->data_length = sizeof(struct sd_stat);
@@ -906,19 +907,19 @@ static int local_flush_and_del(struct request *req)
 }
 
 static int local_trace_enable(const struct sd_req *req, struct sd_rsp *rsp,
-			      void *data)
+			      void *data, const struct sd_node *sender)
 {
 	return trace_enable(data);
 }
 
 static int local_trace_disable(const struct sd_req *req, struct sd_rsp *rsp,
-			       void *data)
+			       void *data, const struct sd_node *sender)
 {
 	return trace_disable(data);
 }
 
 static int local_trace_status(const struct sd_req *req, struct sd_rsp *rsp,
-			      void *data)
+			      void *data, const struct sd_node *sender)
 {
 	rsp->data_length = trace_status(data);
 
@@ -941,7 +942,7 @@ static int local_trace_read_buf(struct request *request)
 }
 
 static int local_kill_node(const struct sd_req *req, struct sd_rsp *rsp,
-			   void *data)
+			   void *data, const struct sd_node *sender)
 {
 	sys->cinfo.status = SD_STATUS_KILLED;
 	unregister_listening_fds();
@@ -1059,7 +1060,7 @@ static int local_oid_exist(struct request *req)
 }
 
 static int local_cluster_info(const struct sd_req *req, struct sd_rsp *rsp,
-			      void *data)
+			      void *data, const struct sd_node *sender)
 {
 	memcpy(data, &sys->cinfo, sizeof(sys->cinfo));
 	rsp->data_length = sizeof(sys->cinfo);
@@ -1199,7 +1200,7 @@ out:
 }
 
 static int local_prevent_cow(const struct sd_req *req, struct sd_rsp *rsp,
-			     void *data)
+			     void *data, const struct sd_node *sender)
 {
 	/* FIXME: change type of process_main() */
 	struct request *rq = container_of(req, struct request, rq);
@@ -1219,7 +1220,7 @@ static int local_prevent_cow(const struct sd_req *req, struct sd_rsp *rsp,
 }
 
 static int local_allow_cow(const struct sd_req *req, struct sd_rsp *rsp,
-			   void *data)
+			   void *data, const struct sd_node *sender)
 {
 	struct request *rq;
 
@@ -1726,9 +1727,10 @@ void do_process_work(struct work *work)
 }
 
 int do_process_main(const struct sd_op_template *op, const struct sd_req *req,
-		    struct sd_rsp *rsp, void *data)
+		    struct sd_rsp *rsp, void *data,
+		    const struct sd_node *sender)
 {
-	return op->process_main(req, rsp, data);
+	return op->process_main(req, rsp, data, sender);
 }
 
 static int map_table[] = {
