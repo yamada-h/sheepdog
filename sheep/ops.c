@@ -639,6 +639,15 @@ static int cluster_notify_vdi_add(const struct sd_req *req, struct sd_rsp *rsp,
 	add_vdi_state(req->vdi_state.new_vid, req->vdi_state.copies, false,
 		      req->vdi_state.copy_policy);
 
+	if (req->vdi_state.old_vid &&
+	    !transfer_locked_vdi(req->vdi_state.old_vid,
+				 req->vdi_state.new_vid)) {
+		sd_err("failed to transfer owner of VDI %"PRIx32
+		       " to VDI %"PRIx32, req->vdi_state.old_vid,
+			req->vdi_state.new_vid);
+		return SD_RES_VDI_NOT_LOCKED;
+	}
+
 	return SD_RES_SUCCESS;
 }
 
@@ -1237,6 +1246,21 @@ static int local_allow_cow(const struct sd_req *req, struct sd_rsp *rsp,
 	return SD_RES_SUCCESS;
 }
 
+static int cluster_lock_vdi(const struct sd_req *req, struct sd_rsp *rsp,
+			    void *data, const struct sd_node *sender)
+{
+	uint32_t vid = rsp->vdi.vdi_id;
+
+	sd_info("node: %s is locking VDI: %"PRIx32, node_to_str(sender), vid);
+
+	if (!lock_vdi(vid, &sender->nid)) {
+		sd_err("locking %"PRIx32 "failed", vid);
+		return SD_RES_VDI_NOT_LOCKED;
+	}
+
+	return SD_RES_SUCCESS;
+}
+
 static struct sd_op_template sd_ops[] = {
 
 	/* cluster operations */
@@ -1331,6 +1355,7 @@ static struct sd_op_template sd_ops[] = {
 		.name = "LOCK_VDI",
 		.type = SD_OP_TYPE_CLUSTER,
 		.process_work = cluster_get_vdi_info,
+		.process_main = cluster_lock_vdi,
 	},
 
 	[SD_OP_REWEIGHT] = {

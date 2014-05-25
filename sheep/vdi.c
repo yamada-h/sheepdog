@@ -11,11 +11,23 @@
 
 #include "sheep_priv.h"
 
+enum lock_state {
+	LOCK_STATE_INIT,
+	LOCK_STATE_LOCKED,
+	LOCK_STATE_UNLOCKED,
+};
+
+struct vdi_lock_state {
+	enum lock_state state;
+	struct node_id owner;
+};
+
 struct vdi_state_entry {
 	uint32_t vid;
 	unsigned int nr_copies;
 	bool snapshot;
 	uint8_t copy_policy;
+	struct vdi_lock_state lock_state;
 	struct rb_node node;
 };
 
@@ -148,6 +160,9 @@ int add_vdi_state(uint32_t vid, int nr_copies, bool snapshot, uint8_t cp)
 	entry->snapshot = snapshot;
 	entry->copy_policy = cp;
 
+	entry->lock_state.state = LOCK_STATE_INIT;
+	memset(&entry->lock_state.owner, 0, sizeof(struct node_id));
+
 	if (cp) {
 		int d;
 
@@ -220,6 +235,121 @@ int vdi_exist(uint32_t vid)
 out:
 	free(inode);
 	return ret;
+}
+
+bool lock_vdi(uint32_t vid, const struct node_id *owner)
+{
+	struct vdi_state_entry *entry;
+
+	entry = vdi_state_search(&vdi_state_root, vid);
+	if (!entry) {
+		sd_err("no vdi state entry of %"PRIx32" found", vid);
+		return false;
+	}
+
+	switch (entry->lock_state.state) {
+	case LOCK_STATE_INIT:
+	case LOCK_STATE_UNLOCKED:
+		entry->lock_state.state = LOCK_STATE_LOCKED;
+		memcpy(&entry->lock_state.owner, owner, sizeof(*owner));
+		sd_info("VDI %"PRIx32" is locked", vid);
+		return true;
+	case LOCK_STATE_LOCKED:
+		sd_info("VDI %"PRIx32" is already locked", vid);
+		break;
+	default:
+		sd_alert("lock state of VDI (%"PRIx32") is unknown: %d",
+			 vid, entry->lock_state.state);
+		break;
+	}
+
+	return false;
+}
+
+bool unlock_vdi(uint32_t vid, const struct node_id *owner)
+{
+	struct vdi_state_entry *entry;
+
+	entry = vdi_state_search(&vdi_state_root, vid);
+	if (!entry) {
+		sd_err("no vdi state entry of %"PRIx32" found", vid);
+		return false;
+	}
+
+	switch (entry->lock_state.state) {
+	case LOCK_STATE_INIT:
+	case LOCK_STATE_UNLOCKED:
+		sd_err("unlocking unlocked VDI: %"PRIx32, vid);
+		break;
+	case LOCK_STATE_LOCKED:
+		if (memcmp(&entry->lock_state.owner, owner, sizeof(*owner))) {
+			sd_err("unlocking locked by different owner");
+			return false;
+		}
+		entry->lock_state.state = LOCK_STATE_UNLOCKED;
+		memset(&entry->lock_state.owner, 0,
+		       sizeof(entry->lock_state.owner));
+		return true;
+	default:
+		sd_alert("lock state of VDI (%"PRIx32") is unknown: %d",
+			 vid, entry->lock_state.state);
+		break;
+	}
+
+	return false;
+}
+
+void unlock_all_vdis(const struct node_id *owner)
+{
+	struct vdi_state_entry *entry;
+
+	rb_for_each_entry(entry, &vdi_state_root, node) {
+		if (memcmp(&entry->lock_state.owner, owner, sizeof(*owner)))
+			continue;
+
+		entry->lock_state.state = LOCK_STATE_UNLOCKED;
+		memset(&entry->lock_state.owner, 0,
+		       sizeof(entry->lock_state.owner));
+	}
+}
+
+static bool get_vdi_owner(uint32_t vid, struct node_id *ret)
+{
+	struct vdi_state_entry *entry;
+
+	entry = vdi_state_search(&vdi_state_root, vid);
+	if (!entry)
+		return false;
+
+	if (entry->lock_state.state != LOCK_STATE_LOCKED)
+		return false;
+
+	memcpy(ret, &entry->lock_state.owner, sizeof(*ret));
+	return true;
+}
+
+bool transfer_locked_vdi(uint32_t old_vid, uint32_t new_vid)
+{
+	struct node_id owner;
+
+	memset(&owner, 0, sizeof(owner));
+	if (!get_vdi_owner(old_vid, &owner)) {
+		sd_info("no owner of %"PRIx32, old_vid);
+		return true;
+	}
+
+	if (!unlock_vdi(old_vid, &owner)) {
+		/* it cannot be happened */
+		sd_err("unlocking VDI %"PRIx32" failed", old_vid);
+		return false;
+	}
+
+	if (!lock_vdi(new_vid, &owner)) {
+		sd_err("locking new VDI %"PRIx32" failed", new_vid);
+		return false;
+	}
+
+	return true;
 }
 
 static struct sd_inode *alloc_inode(const struct vdi_iocb *iocb,

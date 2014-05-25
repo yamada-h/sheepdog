@@ -996,6 +996,7 @@ main_fn void sd_leave_handler(const struct sd_node *left,
 	put_vnode_info(old_vnode_info);
 
 	sockfd_cache_del_node(&left->nid);
+	unlock_all_vdis(&left->nid);
 }
 
 static void update_node_size(struct sd_node *node)
