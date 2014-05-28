@@ -354,6 +354,7 @@ bool lock_vdi(uint32_t vid, const struct node_id *owner);
 bool unlock_vdi(uint32_t vid, const struct node_id *owner);
 void unlock_all_vdis(const struct node_id *owner);
 bool transfer_locked_vdi(uint32_t old_vid, uint32_t new_vid);
+void notify_release_vdi(uint32_t vid);
 
 extern int ec_max_data_strip;
 

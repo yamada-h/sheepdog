@@ -1236,3 +1236,46 @@ int sd_create_hyper_volume(const char *name, uint32_t *vdi_id)
 out:
 	return ret;
 }
+
+struct release_work {
+	struct work work;
+
+	uint32_t vid;
+};
+
+static void notify_release_vdi_work(struct work *work)
+{
+	struct release_work *rw =
+		container_of(work, struct release_work, work);
+
+	struct sd_req hdr;
+	int ret;
+
+	sd_debug("releasing VDI: %"PRIx32, rw->vid);
+	sd_init_req(&hdr, SD_OP_RELEASE_VDI);
+	hdr.vdi.base_vdi_id = rw->vid;
+
+	ret = exec_local_req(&hdr, &sys->this_node);
+	if (ret != SD_RES_SUCCESS)
+		sd_err("failed to release VDI: %"PRIx32, rw->vid);
+}
+
+static void notify_release_vdi_done(struct work *work)
+{
+	struct release_work *rw =
+		container_of(work, struct release_work, work);
+
+	sd_debug("releasing VDI: %"PRIx32" done", rw->vid);
+	free(rw);
+}
+
+void notify_release_vdi(uint32_t vid)
+{
+	struct release_work *w;
+
+	w = xzalloc(sizeof(*w));
+	w->work.fn = notify_release_vdi_work;
+	w->work.done = notify_release_vdi_done;
+	w->vid = vid;
+	queue_work(sys->gateway_wqueue, &w->work);
+}

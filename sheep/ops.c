@@ -381,7 +381,7 @@ static int cluster_get_vdi_attr(struct request *req)
 	return ret;
 }
 
-static int local_release_vdi(struct request *req)
+static int cluster_release_vdi_work(struct request *req)
 {
 	uint32_t vid = req->rq.vdi.base_vdi_id;
 	int ret;
@@ -1417,6 +1417,13 @@ static struct sd_op_template sd_ops[] = {
 		.process_main = cluster_lock_vdi,
 	},
 
+	[SD_OP_RELEASE_VDI] = {
+		.name = "RELEASE_VDI",
+		.type = SD_OP_TYPE_CLUSTER,
+		.process_work = cluster_release_vdi_work,
+		.process_main = cluster_release_vdi_main,
+	},
+
 	[SD_OP_REWEIGHT] = {
 		.name = "REWEIGHT",
 		.type = SD_OP_TYPE_CLUSTER,
@@ -1453,12 +1460,6 @@ static struct sd_op_template sd_ops[] = {
 	},
 
 	/* local operations */
-	[SD_OP_RELEASE_VDI] = {
-		.name = "RELEASE_VDI",
-		.type = SD_OP_TYPE_LOCAL,
-		.process_work = local_release_vdi,
-	},
-
 	[SD_OP_GET_STORE_LIST] = {
 		.name = "GET_STORE_LIST",
 		.type = SD_OP_TYPE_LOCAL,

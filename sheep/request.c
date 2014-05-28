@@ -885,6 +885,10 @@ static void destroy_client(struct client_info *ci)
 	sd_debug("connection from: %s:%d", ci->conn.ipstr, ci->conn.port);
 	close(ci->conn.fd);
 	list_del(&ci->list);
+	if (ci->locking_interest_vid) {
+		sd_debug("unlocking VDI %"PRIx32, ci->interest_vid);
+		notify_release_vdi(ci->interest_vid);
+	}
 	free(ci);
 }
 
