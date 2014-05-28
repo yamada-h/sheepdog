@@ -75,6 +75,8 @@ struct client_info {
 	struct list_head done_reqs;
 
 	refcnt_t refcnt;
+
+	struct list_node list;
 };
 
 enum REQUST_STATUS {

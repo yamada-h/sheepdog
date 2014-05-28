@@ -884,6 +884,7 @@ static void destroy_client(struct client_info *ci)
 {
 	sd_debug("connection from: %s:%d", ci->conn.ipstr, ci->conn.port);
 	close(ci->conn.fd);
+	list_del(&ci->list);
 	free(ci);
 }
 
@@ -908,6 +909,8 @@ static void clear_client_info(struct client_info *ci)
 
 	destroy_client(ci);
 }
+
+static LIST_HEAD(client_list);
 
 static struct client_info *create_client(int fd, struct cluster_info *cluster)
 {
@@ -942,6 +945,9 @@ static struct client_info *create_client(int fd, struct cluster_info *cluster)
 	refcount_set(&ci->refcnt, 0);
 
 	INIT_LIST_HEAD(&ci->done_reqs);
+
+	INIT_LIST_NODE(&ci->list);
+	list_add_tail(&ci->list, &client_list);
 
 	return ci;
 }
