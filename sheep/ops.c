@@ -235,6 +235,18 @@ static int cluster_get_vdi_info(struct request *req)
 	return ret;
 }
 
+static int cluster_lock_vdi_work(struct request *req)
+{
+	int ret;
+
+	ret = cluster_get_vdi_info(req);
+	if (ret != SD_RES_SUCCESS)
+		return ret;
+
+	req->ci->interest_vid = req->rp.vdi.vdi_id;
+	return ret;
+}
+
 static int remove_epoch(uint32_t epoch)
 {
 	int ret;
@@ -646,6 +658,15 @@ static int cluster_notify_vdi_add(const struct sd_req *req, struct sd_rsp *rsp,
 		       " to VDI %"PRIx32, req->vdi_state.old_vid,
 			req->vdi_state.new_vid);
 		return SD_RES_VDI_NOT_LOCKED;
+	}
+
+	if (node_is_local(sender)) {
+		struct client_info *ci;
+
+		ci = lookup_interested_client(req->vdi_state.old_vid);
+		if (!ci)
+			return SD_RES_SUCCESS;
+		ci->interest_vid = req->vdi_state.new_vid;
 	}
 
 	return SD_RES_SUCCESS;
@@ -1258,6 +1279,44 @@ static int cluster_lock_vdi(const struct sd_req *req, struct sd_rsp *rsp,
 		return SD_RES_VDI_NOT_LOCKED;
 	}
 
+	if (!memcmp(&sender->nid, &sys->this_node.nid,
+		    sizeof(struct node_id))) {
+		struct client_info *ci = lookup_interested_client(vid);
+		ci->locking_interest_vid = true;
+
+		sd_debug("client with fd: %d is interested in VDI: %"PRIx32,
+			 ci->conn.fd, vid);
+	}
+
+	return SD_RES_SUCCESS;
+}
+
+static int cluster_release_vdi_main(const struct sd_req *req,
+				    struct sd_rsp *rsp, void *data,
+				    const struct sd_node *sender)
+{
+	uint32_t vid = req->vdi.base_vdi_id;
+
+	sd_info("node: %s is unlocking VDI: %"PRIx32, node_to_str(sender), vid);
+
+	if (!unlock_vdi(vid, &sender->nid)) {
+		sd_err("unlocking %"PRIx32 "failed", vid);
+		return SD_RES_VDI_LOCKED;
+	}
+
+	if (node_is_local(sender)) {
+		struct client_info *ci = lookup_interested_client(vid);
+
+		if (!ci)	/* client is always destroyed */
+			return SD_RES_SUCCESS;
+
+		ci->locking_interest_vid = false;
+		ci->interest_vid = 0;
+
+		sd_debug("client with fd: %d is unlocking VDI: %"PRIx32,
+			 ci->conn.fd, vid);
+	}
+
 	return SD_RES_SUCCESS;
 }
 
@@ -1354,7 +1413,7 @@ static struct sd_op_template sd_ops[] = {
 	[SD_OP_LOCK_VDI] = {
 		.name = "LOCK_VDI",
 		.type = SD_OP_TYPE_CLUSTER,
-		.process_work = cluster_get_vdi_info,
+		.process_work = cluster_lock_vdi_work,
 		.process_main = cluster_lock_vdi,
 	},
 

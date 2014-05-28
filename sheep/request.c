@@ -912,6 +912,18 @@ static void clear_client_info(struct client_info *ci)
 
 static LIST_HEAD(client_list);
 
+struct client_info *lookup_interested_client(uint32_t vid)
+{
+	struct client_info *ci;
+
+	list_for_each_entry(ci, &client_list, list) {
+		if (ci->interest_vid)
+			return ci;
+	}
+
+	return NULL;
+}
+
 static struct client_info *create_client(int fd, struct cluster_info *cluster)
 {
 	struct client_info *ci;

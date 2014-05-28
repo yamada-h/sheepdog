@@ -77,6 +77,9 @@ struct client_info {
 	refcnt_t refcnt;
 
 	struct list_node list;
+
+	bool locking_interest_vid;
+	uint32_t interest_vid;
 };
 
 enum REQUST_STATUS {
@@ -322,6 +325,7 @@ static inline bool is_aligned_to_pagesize(void *p)
 int create_listen_port(const char *bindaddr, int port);
 int init_unix_domain_socket(const char *dir);
 void unregister_listening_fds(void);
+struct client_info *lookup_interested_client(uint32_t vid);
 
 int init_store_driver(bool is_gateway);
 int init_global_pathnames(const char *d, char *);
