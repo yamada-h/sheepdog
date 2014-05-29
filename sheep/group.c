@@ -271,6 +271,72 @@ drop:
 	cluster_op_running = false;
 }
 
+static int ab_eventfd;
+static LIST_HEAD(ab_queue);
+
+enum ab_type {
+	AB_TYPE_BLOCK,
+	AB_TYPE_NOTIFY,
+	AB_TYPE_JOIN,
+	AB_TYPE_ACCEPT,
+	AB_TYPE_LEAVE,
+	AB_TYPE_UPDATE_NODE,
+};
+
+struct ab_message_block {
+	struct sd_node *sender;
+};
+
+struct ab_message_notify {
+	struct sd_node *sender;
+	void *data;
+	size_t data_len;
+};
+
+struct ab_message_join {
+	struct sd_node *joining;
+	struct rb_root *nroot;
+	size_t nr_nodes;
+	void *opaque;
+};
+
+struct ab_message_accept {
+	struct sd_node *joined;
+	struct rb_root *nroot;
+	size_t nr_nodes;
+	void *opaque;
+};
+
+struct ab_message_leave {
+	struct sd_node *left;
+	struct rb_root *nroot;
+	size_t nr_nodes;
+};
+
+struct ab_message_update_node {
+	struct sd_node *node;
+};
+
+struct ab_message {
+	enum ab_type type;
+	struct list_node list;
+
+	union {
+		struct ab_message_block block;
+		struct ab_message_notify notify;
+		struct ab_message_join join;
+		struct ab_message_accept accept;
+		struct ab_message_leave leave;
+		struct ab_message_update_node update_node;
+	};
+};
+
+static main_fn void queue_ab_message(struct ab_message *msg)
+{
+	list_add_tail(&msg->list, &ab_queue);
+	eventfd_xwrite(ab_eventfd, 1);
+}
+
 /*
  * Perform a blocked cluster operation if we were the node requesting it
  * and do not have any other operation pending.
@@ -1035,8 +1101,54 @@ static void kick_node_recover(void)
 
 main_fn void sd_update_node_handler(struct sd_node *node)
 {
-	update_node_size(node);
+	struct ab_message *msg;
+
+	msg = xzalloc(sizeof(*msg));
+	msg->type = AB_TYPE_UPDATE_NODE;
+	msg->update_node.node = xzalloc(sizeof(*msg->update_node.node));
+	memcpy(msg->update_node.node, node, sizeof(*node));
+
+	queue_ab_message(msg);
+}
+
+main_fn static void do_sd_update_node(struct ab_message *msg)
+{
+	update_node_size(msg->update_node.node);
 	kick_node_recover();
+}
+
+/*
+ * ab_handler(): a handler for processing state transfer requests based on
+ * atomic broadcast
+ */
+static main_fn void ab_handler(int fd, int events, void *data)
+{
+	struct ab_message *msg;
+	LIST_HEAD(queued);
+
+	eventfd_xread(fd);
+
+	list_splice_init(&ab_queue, &queued);
+	list_for_each_entry(msg, &queued, list) {
+		switch (msg->type) {
+		case AB_TYPE_ACCEPT:
+			break;
+		case AB_TYPE_LEAVE:
+			break;
+		case AB_TYPE_UPDATE_NODE:
+			do_sd_update_node(msg);
+			free(msg->update_node.node);
+			break;
+		case AB_TYPE_BLOCK:
+		case AB_TYPE_NOTIFY:
+		case AB_TYPE_JOIN:
+		default:
+			panic("not supported yet");
+		}
+
+		list_del(&msg->list);
+		free(msg);
+	}
 }
 
 int create_cluster(int port, int64_t zone, int nr_vnodes,
@@ -1049,6 +1161,14 @@ int create_cluster(int port, int64_t zone, int nr_vnodes,
 		sd_debug("use %s cluster driver as default",
 			 DEFAULT_CLUSTER_DRIVER);
 	}
+
+	ab_eventfd = eventfd(0, EFD_NONBLOCK);
+	if (ab_eventfd < 0)
+		return -1;
+
+	ret = register_event(ab_eventfd, ab_handler, NULL);
+	if (ret < 0)
+		return -1;
 
 	ret = sys->cdrv->init(sys->cdrv_option);
 	if (ret < 0)
