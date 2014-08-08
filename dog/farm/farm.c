@@ -357,7 +357,7 @@ int farm_save_snapshot(const char *tag)
 
 	strbuf_init(&trunk_buf, sizeof(struct trunk_entry) * nr_objects);
 
-	wq = create_work_queue("save snapshot", WQ_ORDERED);
+	wq = create_work_queue("save snapshot", WQ_DYNAMIC);
 	if (for_each_object_in_tree(queue_save_snapshot_work,
 				    &trunk_buf) < 0) {
 		ret = -1;
