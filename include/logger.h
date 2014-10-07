@@ -36,10 +36,15 @@ enum log_dst_type {
 	LOG_DST_SYSLOG,
 };
 
+enum log_rotate_type {
+	LOG_ROTATE_TYPE_DEFAULT,
+	LOG_ROTATE_TYPE_DEBIAN,
+};
+
 void early_log_init(const char *format_name,
 		struct logger_user_info *user_info);
 int log_init(const char *progname, enum log_dst_type type, int level,
-	     char *outfile);
+	     char *outfile, enum log_rotate_type r_type);
 void log_close(void);
 void dump_logmsg(void *);
 void log_write(int prio, const char *func, int line, const char *fmt, ...)

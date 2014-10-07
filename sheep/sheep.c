@@ -360,11 +360,20 @@ static int log_dst_parser(const char *s)
 	return 0;
 }
 
+static const char *log_rotate = "default";
+
+static int log_rotate_parser(const char *s)
+{
+	log_rotate = s;
+	return 0;
+}
+
 static struct option_parser log_parsers[] = {
 	{ "level=", log_level_parser },
 	{ "dir=", log_dir_parser },
 	{ "format=", log_format_parser },
 	{ "dst=", log_dst_parser },
+	{ "rotate=", log_rotate_parser },
 	{ NULL, NULL },
 };
 
@@ -623,6 +632,7 @@ int main(int argc, char **argv)
 	static struct logger_user_info sheep_info;
 	struct stat logdir_st;
 	enum log_dst_type log_dst_type;
+	enum log_rotate_type log_rotate_type;
 
 	sys->node_status = SD_NODE_STATUS_INITIALIZATION;
 
@@ -787,6 +797,15 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	if (!strcmp(log_rotate, "default"))
+		log_rotate_type = LOG_ROTATE_TYPE_DEFAULT;
+	else if (!strcmp(log_rotate, "debian"))
+		log_rotate_type = LOG_ROTATE_TYPE_DEBIAN;
+	else {
+		sd_err("invalid type of log rotation: %s", log_rotate);
+		exit(1);
+	}
+
 	if (logdir) {
 		if (log_dst_type != LOG_DST_DEFAULT) {
 			sd_err("logdir (%s) is specified but logging"
@@ -831,7 +850,8 @@ int main(int argc, char **argv)
 		goto cleanup_dir;
 	}
 
-	ret = log_init(program_name, log_dst_type, log_level, log_path);
+	ret = log_init(program_name, log_dst_type, log_level, log_path,
+		       log_rotate_type);
 	if (ret) {
 		free(argp);
 		goto cleanup_dir;

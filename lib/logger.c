@@ -122,6 +122,8 @@ static int64_t max_logsize = 500 * 1024 * 1024;  /*500MB*/
 
 static enum log_dst_type dst_type = LOG_DST_STDOUT;
 
+static enum log_rotate_type rotate_type = LOG_ROTATE_TYPE_DEFAULT;
+
 /*
  * block_sighup()
  *
@@ -450,7 +452,7 @@ static void dolog(int prio, const char *func, int line,
 	}
 }
 
-static void rotate_log(void)
+static void rotate_log_default(void)
 {
 	int new_fd;
 
@@ -477,6 +479,15 @@ static void rotate_log(void)
 		exit(1);
 	}
 	close(new_fd);
+}
+
+static void rotate_log_debian(void)
+{
+	log_fd = open(log_nowname, O_APPEND);
+	if (log_fd < 0) {
+		syslog(LOG_ERR, "failed to open a new log file\n");
+		exit(1);
+	}
 }
 
 void log_write(int prio, const char *func, int line, const char *fmt, ...)
@@ -554,7 +565,18 @@ static void crash_handler(int signo)
 
 static void sighup_handler(int signo)
 {
-	rotate_log();
+	switch (rotate_type) {
+	case LOG_ROTATE_TYPE_DEFAULT:
+		rotate_log_default();
+		break;
+	case LOG_ROTATE_TYPE_DEBIAN:
+		rotate_log_debian();
+		break;
+	default:
+		syslog(LOG_ERR, "unknown type of log rotate: %d\n",
+		       rotate_type);
+		break;
+	}
 }
 
 static void logger(char *log_dir, char *outfile)
@@ -611,8 +633,9 @@ static void logger(char *log_dir, char *outfile)
 				syslog(LOG_ERR, "sheep log error\n");
 			} else {
 				size_t log_size = (size_t)offset;
-				if (log_size >= max_logsize)
-					rotate_log();
+				if (rotate_type == LOG_ROTATE_TYPE_DEFAULT &&
+				    log_size >= max_logsize)
+					rotate_log_default();
 			}
 		}
 
@@ -654,13 +677,14 @@ void early_log_init(const char *format_name, struct logger_user_info *user_info)
 }
 
 int log_init(const char *program_name, enum log_dst_type type, int level,
-		     char *outfile)
+	     char *outfile, enum log_rotate_type r_type)
 {
 	char log_dir[PATH_MAX], tmp[PATH_MAX];
 	int size = level == SDOG_DEBUG ? LOG_SPACE_DEBUG_SIZE : LOG_SPACE_SIZE;
 
 	dst_type = type;
 	sd_log_level = level;
+	rotate_type = rotate_type;
 
 	log_name = program_name;
 	log_nowname = outfile;

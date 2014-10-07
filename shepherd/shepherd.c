@@ -721,7 +721,8 @@ int main(int argc, char **argv)
 	shepherd_info.port = port;
 	early_log_init(log_format, &shepherd_info);
 
-	ret = log_init(progname, !daemonize, log_level, (char *)log_file);
+	ret = log_init(progname, !daemonize, log_level, (char *)log_file,
+		       LOG_ROTATE_TYPE_DEFAULT);
 	if (ret)
 		panic("initialize logger failed: %m");
 
