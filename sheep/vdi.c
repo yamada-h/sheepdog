@@ -673,7 +673,7 @@ worker_fn bool is_refresh_required(uint32_t vid)
 		if (entry->participants_state[i] ==
 		    SHARED_LOCK_STATE_INVALIDATED)
 			ret = true;
-		sd_error("debug: refresh required");
+		sd_info("debug: refresh required");
 		goto out;
 	}
 
