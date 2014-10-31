@@ -485,7 +485,7 @@ int default_create_and_write(uint64_t oid, const struct siocb *iocb)
 			if (errno == EEXIST) {
 				sd_debug("duplicated CREATE_AND_WRITE request");
 				ret = default_write(oid, iocb);
-                                switched = 1;
+				switched = 1;
 				goto out;
 			}
 
