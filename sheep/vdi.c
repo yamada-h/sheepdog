@@ -667,7 +667,7 @@ worker_fn bool is_refresh_required(uint32_t vid)
 		goto out;
 
 	for (int i = 0; i < entry->nr_participants; i++) {
-		if (node_id_cmp(&entry->participants[i], &sys->this_node.nid))
+		if (node_id_cmp(&entry->participants[i], &sys->this_node.nid) != 0)
 			continue;
 
 		if (entry->participants_state[i] ==
