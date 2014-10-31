@@ -407,7 +407,7 @@ int default_create_and_write(uint64_t oid, const struct siocb *iocb)
 {
 	char path[PATH_MAX], tmp_path[PATH_MAX];
 	int flags = prepare_iocb(oid, iocb, true);
-	int ret, tmp_fd = -1, create_fd = -1;
+	int ret, switched = 0, tmp_fd = -1, create_fd = -1;
 	uint32_t len = iocb->length;
 	size_t obj_size;
 	uint64_t offset = iocb->offset;
@@ -484,12 +484,13 @@ int default_create_and_write(uint64_t oid, const struct siocb *iocb)
 		if (create_fd < 0) {
 			if (errno == EEXIST) {
 				sd_debug("duplicated CREATE_AND_WRITE request");
-				ret = SD_RES_SUCCESS;
+				ret = default_write(oid, iocb);
+                                switched = 1;
 				goto out;
 			}
 
 			sd_err("failed to create path: %s", path);
-			ret = default_write(oid, iocb);
+			ret = err_to_sderr(path, oid, errno);
 			goto out;
 		}
 	}
@@ -504,7 +505,7 @@ int default_create_and_write(uint64_t oid, const struct siocb *iocb)
 	ret = SD_RES_SUCCESS;
 	objlist_cache_insert(oid);
 out:
-	if (ret != SD_RES_SUCCESS)
+	if (ret != SD_RES_SUCCESS || switched)
 		unlink(tmp_path);
 	close(tmp_fd);
 	close(create_fd);
