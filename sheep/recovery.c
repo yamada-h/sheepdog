@@ -82,6 +82,7 @@ static struct recovery_info *next_rinfo;
 static main_thread(struct recovery_info *) current_rinfo;
 
 static void queue_recovery_work(struct recovery_info *rinfo);
+static void free_recovery_obj_work(struct recovery_obj_work *row);
 
 /* Dynamically grown list buffer default as 4M (2T storage) */
 #define DEFAULT_LIST_BUFFER_SIZE (UINT64_C(1) << 22)
@@ -580,22 +581,39 @@ bool node_in_recovery(void)
 	return main_thread_get(current_rinfo) != NULL;
 }
 
+static void recover_object_prio_main(struct work *work)
+{
+	struct recovery_work *rw = container_of(work, struct recovery_work,
+						work);
+	struct recovery_obj_work *row = container_of(rw,
+						     struct recovery_obj_work,
+						     base);
+
+	wakeup_requests_on_oid(row->oid);
+
+	free_recovery_obj_work(row);
+	return;
+}
+
 static inline void prepare_schedule_oid(uint64_t oid)
 {
 	struct recovery_info *rinfo = main_thread_get(current_rinfo);
 
-	if (xlfind(&oid, rinfo->prio_oids, rinfo->nr_prio_oids, oid_cmp)) {
-		sd_debug("%" PRIx64 " has been already in prio_oids", oid);
-		return;
-	}
+	struct recovery_work *rw;
+	struct recovery_obj_work *row;
+	row = xzalloc(sizeof(*row));
+	row->oid = oid;
 
-	rinfo->nr_prio_oids++;
-	rinfo->prio_oids = xrealloc(rinfo->prio_oids,
-				    rinfo->nr_prio_oids * sizeof(uint64_t));
-	rinfo->prio_oids[rinfo->nr_prio_oids - 1] = oid;
-	sd_debug("%"PRIx64" nr_prio_oids %"PRIu64, oid, rinfo->nr_prio_oids);
+	rw = &row->base;
+	rw->work.fn = recover_object_work;
+	rw->work.done = recover_object_prio_main;
+	rw->epoch = rinfo->epoch;
+	rw->tgt_epoch = rinfo->tgt_epoch;
+	rw->rinfo = rinfo;
+	rw->cur_vinfo = grab_vnode_info(rinfo->cur_vinfo);
+	rw->old_vinfo = grab_vnode_info(rinfo->old_vinfo);
 
-	resume_suspended_recovery();
+	queue_work(sys->recovery_wqueue, &rw->work);
 }
 
 main_fn bool oid_in_recovery(uint64_t oid)
