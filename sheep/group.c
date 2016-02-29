@@ -1226,7 +1226,9 @@ main_fn void sd_accept_handler(const struct sd_node *joined,
 
 	if (node_is_local(joined) && !cluster_join_check(cinfo)) {
 		sd_err("failed to join Sheepdog");
-		exit(1);
+		leave_cluster();
+		sys->cinfo.status = SD_STATUS_KILLED;
+		return;
 	}
 
 	cluster_info_copy(&sys->cinfo, cinfo);
